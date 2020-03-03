@@ -57,7 +57,7 @@ def test_hashcat(password, message):
     h = hashlib.md5(s).hexdigest()
     with open("hash_test", "w") as f:
         f.write(h + ':' + message)
-    os.system("hashcat -m 20 -a 3 --hex-salt {} ?u?l?l?l?l".format(file_hash))
+    os.system("hashcat-5.1.0/hashcat64.bin -m 20 -a 3 --hex-salt {} ?u?l?l?l?l".format(file_hash))
     os.remove(file_hash)
 
 
@@ -66,32 +66,37 @@ def hashcat_crack(md5_hash, message, mask, increment=False, increment_b=(1,9)):
     s = bytes.fromhex(message)
     with open(file_hash, "w") as f:
         f.write(md5_hash + ':' + message)
-    c = "hashcat -m 20 -a 3 --hex-salt {} {}".format(file_hash, mask)
+    c = "hashcat-5.1.0/hashcat64.bin -m 20 -a 3 --hex-salt {} {}".format(file_hash, mask)
     if increment:
         c += " --increment --increment-min {} --increment-max {}".format(increment_b[0], increment_b[1])
     os.system(c)
     os.system(c + " --show")
     os.remove(file_hash)
 
+def compare_hashes(packet_hash, message, password):
+    s = bytes.fromhex(message) + bytes(password, encoding='utf-8')
+    computed_hash = hashlib.md5(s).hexdigest()
 
-# def hashcat_command(md5_hash, message, bytes_mask=6):
-#     #Add --increment for increment of length
-#     c = "hashcat -m 0 -a 3 --hex-charset "  +  md5_hash +  " " + message + "?h" * bytes_mask
-#     return c
+    print("\nComputed hash and real hash are:")
+    print("\t", computed_hash)
+    print("\t", packet_hash)
+
 
 
 if __name__ == "__main__":
     if len(sys.argv) > 1:
         input_file = sys.argv[1]
     else:
-        input_file = "BGP_MD5.cap"
-        # input_file = input("Input file (pcap): ")
+        input_file = "bgp_packets.pcap"
     
     packets = scapy.rdpcap(input_file)
     hash_pairs = parse_packets(packets)
-    for p in hash_pairs[2:3]:
+    for p in hash_pairs:
         h,m = p[0], p[1]
-        print(h,m)
+        compare_hashes(h,m,"test")
+
+
+
     #try to break the BGP password
-    mask = "-1 ?u?l -2 ?u?l?d ?2?2?2?2?2?2?2?2?2?2"
-    hashcat_crack(h,m,mask, increment=True, increment_b=(7,10))
+    # mask = "-1 ?u?l -2 ?u?l?d ?2?2?2?2"
+    # hashcat_crack(h,m,mask, increment=False)
