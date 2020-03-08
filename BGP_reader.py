@@ -4,6 +4,11 @@ from scapy.layers.inet import IP, TCP
 from scapy.contrib.bgp import *
 from scapy.compat import raw
 import hashlib
+import struct
+import binascii
+from socket import inet_aton
+import dpkt
+
 
 
 def IP_to_hexstring(s):
@@ -15,6 +20,8 @@ def IP_to_hexstring(s):
     return h 
 
 
+
+
 def get_hashed_message(p):
     """
     Returns a hex string with the contents hashed in the TCP md5 option (except the password):
@@ -24,8 +31,12 @@ def get_hashed_message(p):
     # TCP pseudo header
     message += IP_to_hexstring(p[IP].src)
     message += IP_to_hexstring(p[IP].dst)
+    # Padd protocol to 2 bytes
+    message += "00"
     message += "{:02x}".format(p[IP].proto)
     message += "{:04x}".format(p[IP].len)
+    # struct_message = struct.pack("!4s4sHH", inet_aton(p[IP].src), inet_aton(p[IP].dst), p[IP].proto, p[IP].len)
+    # at this point message == struc_message
     #TCP header, excluding options and with checksum = 0
     header = raw(p[TCP])
     s = header[:16] + b"\x00\x00" + header[18:20]
@@ -36,6 +47,8 @@ def get_hashed_message(p):
     #if no payload, s = ""
     message += s
     return message
+
+
 
 def parse_packets(packets):
     hash_pairs = []
@@ -74,12 +87,10 @@ def hashcat_crack(md5_hash, message, mask, increment=False, increment_b=(1,9)):
     os.remove(file_hash)
 
 def compare_hashes(packet_hash, message, password):
-    s = bytes.fromhex(message) + bytes(password, encoding='utf-8')
+    s = bytes.fromhex(message) + bytes(password, encoding="utf-8")
     computed_hash = hashlib.md5(s).hexdigest()
-
-    print("\nComputed hash and real hash are:")
-    print("\t", computed_hash)
-    print("\t", packet_hash)
+    print("\n{0:<10}".format("Computed:"), computed_hash)
+    print("{0:<10}".format("Packet:"), packet_hash)
 
 
 
@@ -94,8 +105,6 @@ if __name__ == "__main__":
     for p in hash_pairs:
         h,m = p[0], p[1]
         compare_hashes(h,m,"test")
-
-
 
     #try to break the BGP password
     # mask = "-1 ?u?l -2 ?u?l?d ?2?2?2?2"
