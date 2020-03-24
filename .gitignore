@@ -1,4 +1,6 @@
-__pycache__
-gns3project
-documents/
+gns3project/
 GNS/
+__pycache__/*.pyc
+scapy/
+dpkt/
+documents/

@@ -51,7 +51,6 @@ def get_md5_salt(buf):
     salt = get_md5_salt_from_bytes(raw_ip_data, raw_tcp_data)
     return salt
 
-
 def get_md5_signature(buf):
     """Parses a packet to find a TCP MD5 signature.
     
@@ -118,7 +117,7 @@ def check_password(packet_hash, salt, password):
     h = hashlib.md5(salt).hexdigest()
     sys.stdout.write("{:<16} | {} | {} | {}\n".format(password.decode("utf-8"),packet_hash.hex(), h, salt.hex()[:64])) 
 
-def launch_hashcat(h,s,mask, output_file=""):
+def launch_hashcat(h,s,mask):
     """Launch hashcat to launch a mask attack using the givan mask on a MD5 hash with the given salt
     
     Args:
@@ -128,10 +127,10 @@ def launch_hashcat(h,s,mask, output_file=""):
     """
     s_hash = h.hex() + ":" + s.hex()
     c = "hashcat-5.1.0/hashcat64.bin -m 20 -a 3 --hex-salt {} {}".format(s_hash, mask)
-    os.system(c)
-    if output_file != "":
-        #risk of command injection if letting user input there
-        os.system(c + " --show > " + output_file)
+    os.system(c + " > /dev/null 2> /dev/null")
+    #risk of command injection if letting user input there
+    result = os.popen(c + " --show").read()
+    return result
 
 
 if __name__ == "__main__":
