@@ -40,7 +40,7 @@ def craft_BGP_update_packet(nlri_prefix, path=[], local_pref=0):
         pref_attribute = BGPPathAttr(type_flags=0b01000000, type_code=5, attribute=BGPPALocalPref(local_pref=local_pref))
         attributes.append(pref_attribute)
     update = BGPUpdate(path_attr=attributes, nlri=BGPNLRI_IPv4(prefix=nlri_prefix))
-    bgp_packet = hdr / update
+    bgp_packet = header / update
     return bgp_packet
 
 
