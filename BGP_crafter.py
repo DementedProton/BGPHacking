@@ -7,7 +7,7 @@ from scapy.utils import wrpcap
 from scapy.compat import raw
 import dpkt
 from scapy.layers.l2 import Ether
- 
+#https://stackoverflow.com/questions/39104621/setting-up-bgp-layer-using-scapy/39107539#39107539 
 
 def sign_single_packet(packet, password):
     #add an MD5 signature so that the length contains the signature
@@ -27,8 +27,7 @@ def sign_single_packet(packet, password):
 
     return packet
 
-
-def craft_BGP_update(nlri_prefix, path=[], local_pref=0):
+def craft_BGP_update_packet(nlri_prefix, path=[], local_pref=0):
     """Returns a scapy BGPupdate packet with the given parameters"""
     header = BGPHeader(type=2, marker=0xffffffffffffffffffffffffffffffff)  
     attributes = []
@@ -45,32 +44,39 @@ def craft_BGP_update(nlri_prefix, path=[], local_pref=0):
     return bgp_packet
 
 
-
-## EXAMPLE FROM STACK OVERFLOW
-src_ipv4_addr = '192.168.12.1'  # eth0
-dst_ipv4_addr = '192.168.12.2'
-established_port = 36376
-expected_seq_num=1000 # ack
-current_seq_num=1500 # seq
-NLRI_PREFIX = '10.110.99.0/24'
-
-base = IP(src=src_ipv4_addr, dst=dst_ipv4_addr, proto=6, ttl=255)  
-tcp = TCP(sport=established_port, dport=179, seq=current_seq_num, ack=expected_seq_num, flags='PA')
-up = BGPUpdate(path_attr=[BGPPathAttr(type_flags=64, type_code=5, attribute=BGPPALocalPref(local_pref=100))], nlri=BGPNLRI_IPv4(prefix=NLRI_PREFIX))      
-hdr = BGPHeader(type=2, marker=0xffffffffffffffffffffffffffffffff)  
-# proto=6 represents that, TCP will be travelling above this layer. This is simple IPV4 communication.
-# dport=179 means, we are communicating with bgp port of the destination router/ host. sport is a random port over which tcp is established. seq and ack are the sequence number and acknowledgement numbers. flags = PA are the PUSH and ACK flags
-# update packet consist of path attributes and NLRI (Network layer reachability information),  type_code in path attributes is for which type of path attribute it is. [more][3]
-# type=2 means UPDATE packet will be the BGP Payload, marker field is for authentication. max hex int (all f) are used for no auth.
-
-packet = Ether()/ base / tcp / hdr / up
+def TCP_handshake(ip_src, ip_dst, sport, dport, seq_num):
+    """Perform a TCP handshake as a client, sending SYN, receiving SYN_ACK and respondinc with ACK"""
+    # SYN
+    ip=IP(src=ip_src,dst=ip_dst)
+    SYN=ip/TCP(sport=sport,dport=dport,flags='S',seq=seq_num)
+    #compute checksum
+    SYN = SYN.__class__(bytes(SYN))
+    SYN.show()
+    #send SYN
+    SYNACK=sr1(ip/SYN)
+    # SYN-ACK
+    ACK=TCP(sport=sport, dport=dport, flags='A', seq=SYNACK.ack + 1, ack=SYNACK.seq + 1)
+    send(ip/ACK)
+    return SYNACK
 
 
+def inject_packet():
+    IP_src = "192.168.12.12"
+    IP_dst = "192.168.12.1"
+    src_port = 36376
+    BGP_port = 179
+    seq_num = 1000
+    print("TCP handshake")
+    syn_ack = TCP_handshake(IP_src, IP_dst, src_port, BGP_port, seq_num)
+    print("Handshake done")
+    ip = IP(src=IP_src, dst=IP_dst, proto=6, ttl=255)
+    tcp = TCP(sport=src_port, dport=BGP_port, seq=syn_ack[TCP].ack, ack=syn_ack[TCP].seq + 1, flags='PA')
+    hdr = BGPHeader(type=2, marker=0xffffffffffffffffffffffffffffffff)  
+    bgp_packet = craft_BGP_update_packet("192.168.0.1/24", path=[2,3], local_pref=90)
+    packet = Ether()/ ip / tcp / bgp_packet
+    signed_packet = sign_single_packet(packet,"azerty")
+    signed_packet.show()
+    send(signed_packet)
 
-bgp_packet = craft_BGP_update("192.168.0.1/24", path=[0,1,2,3], local_pref=90)
-packet = Ether()/ base / tcp / bgp_packet
-packet.show()
-
-packet_list = [packet]
-signed_packet = sign_single_packet(packet,"nana")
-wrpcap('bgp_crafted.pcap', signed_packet, append=False)
+if __name__ == "__main__":
+    inject_packet()

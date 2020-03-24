@@ -118,7 +118,7 @@ def check_password(packet_hash, salt, password):
     h = hashlib.md5(salt).hexdigest()
     sys.stdout.write("{:<16} | {} | {} | {}\n".format(password.decode("utf-8"),packet_hash.hex(), h, salt.hex()[:64])) 
 
-def launch_hashcat(h,s,mask):
+def launch_hashcat(h,s,mask, output_file=""):
     """Launch hashcat to launch a mask attack using the givan mask on a MD5 hash with the given salt
     
     Args:
@@ -129,11 +129,14 @@ def launch_hashcat(h,s,mask):
     s_hash = h.hex() + ":" + s.hex()
     c = "hashcat-5.1.0/hashcat64.bin -m 20 -a 3 --hex-salt {} {}".format(s_hash, mask)
     os.system(c)
+    if output_file != "":
+        #risk of command injection if letting user input there
+        os.system(c + " --show > " + output_file)
 
 
 if __name__ == "__main__":
-    input_file = "bgp_crafted.pcap"
+    input_file = "captures/bgp_crafted.pcap"
     hashes = parse_signed_packets_md5(input_file)
     check_password(hashes[0][0], hashes[0][1], "nana")
-    mask = "-1 ?u?l -2 ?u?l?d ?1?1?1?1?1?1 --increment --increment-min 4 --potfile-disable"
+    mask = "-1 ?u?l -2 ?u?l?d ?1?1?1?1?1?1 --increment --increment-min 4"
     launch_hashcat(hashes[0][0], hashes[0][1], mask)
