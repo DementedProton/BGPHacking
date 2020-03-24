@@ -16,9 +16,10 @@ def packet_callback(captured_packet):
 def main(argv):
     if len(argv) != 2:
         print(f"Usage: {argv[0]} <interface_name>")
+        print(f"\n\t i.e.: {argv[0]} \"Realtek PCIe GBE Family Controller\"")
         sys.exit(-1)
     
-    sniff(iface="Realtek PCIe GBE Family Controller", prn=packet_callback, filter="tcp", store=0)
+    sniff(iface=argv[1], prn=packet_callback, filter="tcp", store=0)
 
 if __name__ == "__main__":
   main(sys.argv)
