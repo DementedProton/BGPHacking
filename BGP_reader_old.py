@@ -10,7 +10,6 @@ from socket import inet_aton
 import dpkt
 
 
-
 def IP_to_hexstring(s):
     h = ""
     #remove dots
@@ -18,8 +17,6 @@ def IP_to_hexstring(s):
     for i in l:
         h += "{:02x}".format(int(i))
     return h 
-
-
 
 
 def get_hashed_message(p):
@@ -63,6 +60,7 @@ def parse_packets(packets):
                     hash_pairs.append((md5_hash, message))
     return hash_pairs
 
+
 def test_hashcat(password, message):
     """Test hashcat breaking with a chosen password"""
     file_hash = "hast_test.txt"
@@ -86,12 +84,12 @@ def hashcat_crack(md5_hash, message, mask, increment=False, increment_b=(1,9)):
     os.system(c + " --show")
     os.remove(file_hash)
 
+
 def compare_hashes(packet_hash, message, password):
     s = bytes.fromhex(message) + bytes(password, encoding="utf-8")
     computed_hash = hashlib.md5(s).hexdigest()
     print("\n{0:<10}".format("Computed:"), computed_hash)
     print("{0:<10}".format("Packet:"), packet_hash)
-
 
 
 if __name__ == "__main__":
@@ -104,7 +102,7 @@ if __name__ == "__main__":
     hash_pairs = parse_packets(packets)
     for p in hash_pairs:
         h,m = p[0], p[1]
-        compare_hashes(h,m,"test")
+        compare_hashes(h, m, "test")
 
     #try to break the BGP password
     # mask = "-1 ?u?l -2 ?u?l?d ?2?2?2?2"

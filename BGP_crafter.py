@@ -9,6 +9,7 @@ import dpkt
 from scapy.layers.l2 import Ether
 #https://stackoverflow.com/questions/39104621/setting-up-bgp-layer-using-scapy/39107539#39107539 
 
+
 def sign_single_packet(packet, password):
     #add an MD5 signature so that the length contains the signature
     packet[TCP].options = [(19,b"\x00"*16)]
@@ -24,23 +25,35 @@ def sign_single_packet(packet, password):
     packet_hash = hashlib.md5(salt).digest()
     #add the signature in the options
     packet[TCP].options = [(19,packet_hash)]
-
     return packet
 
-def craft_BGP_update_packet(nlri_prefix, path=[], local_pref=0):
+
+def craft_BGP_update_packet(nlri_prefix, path=[], local_pref=0, origin="IGP", next_hop=None, multi_exit_disc=0):
     """Returns a scapy BGPupdate packet with the given parameters"""
-    header = BGPHeader(type=2, marker=0xffffffffffffffffffffffffffffffff)  
+    header = BGPHeader(type=2, marker=0xffffffffffffffffffffffffffffffff)
     attributes = []
     # 2 bytes or 4 bytes AS numbers ?
-    if path != []:
+    if origin == "IGP":
+        path_attribute = BGPPathAttr(type_flags=0b01000000, type_code=1, attribute=BGPPAOrigin(origin=1))
+        attributes.append(path_attribute)
+    if next_hop:
+        path_attribute = BGPPathAttr(type_flags=0b01000000, type_code=3, attribute=BGPPANextHop(next_hop=next_hop))
+        attributes.append(path_attribute)
+    if path:
         path_segment = BGPPAAS4Path(segment_value=path, segment_length=len(path), segment_type="AS_SEQUENCE")
         path_attribute = BGPPathAttr(type_flags=0b01000000, type_code=2, attribute=path_segment)
+        attributes.append(path_attribute)
+    if multi_exit_disc == 1:
+        path_attribute = BGPPathAttr(type_flags=0b01000000, type_code=4, attribute=BGPPAMultiExitDisc(med=multi_exit_disc))
         attributes.append(path_attribute)
     if local_pref != 0:
         pref_attribute = BGPPathAttr(type_flags=0b01000000, type_code=5, attribute=BGPPALocalPref(local_pref=local_pref))
         attributes.append(pref_attribute)
     update = BGPUpdate(path_attr=attributes, nlri=BGPNLRI_IPv4(prefix=nlri_prefix))
     bgp_packet = header / update
+    bgp_packet.__class__(bytes(bgp_packet))
+    print(bgp_packet)
+    bgp_packet.show()
     return bgp_packet
 
 
@@ -72,9 +85,9 @@ def inject_packet():
     ip = IP(src=IP_src, dst=IP_dst, proto=6, ttl=255)
     tcp = TCP(sport=src_port, dport=BGP_port, seq=syn_ack[TCP].ack, ack=syn_ack[TCP].seq + 1, flags='PA')
     hdr = BGPHeader(type=2, marker=0xffffffffffffffffffffffffffffffff)  
-    bgp_packet = craft_BGP_update_packet("192.168.0.1/24", path=[2,3], local_pref=90)
+    bgp_packet = craft_BGP_update_packet("192.168.0.1/24", path=[2], local_pref=90 )
     packet = Ether()/ ip / tcp / bgp_packet
-    signed_packet = sign_single_packet(packet,"azerty")
+    signed_packet = sign_single_packet(packet, "azerty")
     signed_packet.show()
     send(signed_packet)
 

