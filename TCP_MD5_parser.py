@@ -149,3 +149,4 @@ if __name__ == "__main__":
     # check_password(hashes[0][0], hashes[0][1], "nana")
     mask = "-1 ?u?l -2 ?u?l?d ?1?1?1?1?1?1 --increment --increment-min 4"
     print(launch_hashcat(hashes[0][0], hashes[0][1], mask).split(':')[0])
+
