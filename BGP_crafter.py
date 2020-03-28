@@ -61,7 +61,7 @@ def craft_BGP_update_packet(nlri_prefix, path=[], local_pref=0, origin="IGP", ne
     # bgp_packet[BGPUpdate].path_attr_len = x
     #print('bgp path attr len', bgp_packet[BGPUpdate].path_attr_len)
     #print(bgp_packet)
-    bgp_packet.show()
+    #bgp_packet.show()
     return bgp_packet
 
 
@@ -92,7 +92,7 @@ def inject_packet():
     print("Handshake done")
     ip = IP(src=IP_src, dst=IP_dst, proto=6, ttl=255)
     tcp = TCP(sport=src_port, dport=BGP_port, seq=syn_ack[TCP].ack, ack=syn_ack[TCP].seq + 1, flags='PA')
-    hdr = BGPHeader(type=2, marker=0xffffffffffffffffffffffffffffffff)  
+    hdr = BGPHeader(type=2, marker=0xffffffffffffffffffffffffffffffff)
     bgp_packet = craft_BGP_update_packet("192.168.0.1/24", path=[2], local_pref=90 )
     packet = Ether()/ ip / tcp / bgp_packet
     signed_packet = sign_single_packet(packet, "azerty")

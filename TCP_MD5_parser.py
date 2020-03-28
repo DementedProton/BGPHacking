@@ -6,7 +6,7 @@ import time
 
 def get_md5_salt_from_bytes(raw_ip_data, raw_tcp_data):
     """Parse the packet bytes to get the signature
-    
+
     Args:
         raw_ip_data (bytes): bytes of the IP packet
         raw_tcp_data (bytes): bytes of the TCP packet
@@ -22,9 +22,9 @@ def get_md5_salt_from_bytes(raw_ip_data, raw_tcp_data):
     data_length = length - header_length
     salt = raw_ip_data[12:12 + 8]  # src. and dest. IP
     salt = salt + b"\x00"  # zero padding
-    salt = salt + raw_ip_data[9].to_bytes(1,"little")  # protocol
-    salt = salt + (length // 256).to_bytes(1,"little")  # segment length
-    salt = salt + (length % 256).to_bytes(1,"little")  # segment length
+    salt = salt + raw_ip_data[9].to_bytes(1, "little")  # protocol
+    salt = salt + (length // 256).to_bytes(1, "little")  # segment length
+    salt = salt + (length % 256).to_bytes(1, "little")  # segment length
     # add TCP header
     salt = salt + raw_tcp_data[:16]  # TCP header without checksum
     salt = salt + (b"\x00" * 4)  # add zero checksum
@@ -34,13 +34,13 @@ def get_md5_salt_from_bytes(raw_ip_data, raw_tcp_data):
 
 
 def get_md5_salt(buf):
-    """Gets the TCP pseudo-header + TCP header + TCP segment data of a TCP packet. 
+    """Gets the TCP pseudo-header + TCP header + TCP segment data of a TCP packet.
     This form the salt of the MD5 signature of the packet
     This function gets bytes from the dpkt packet and calls get_md5_salt_from_bytes()
-    
+
     Args:
         buf (dpkt buffer): The packet gotten from a dpkt reader object. The packet must have an Ethernet, IP and TCP layer
-    
+
     Returns:
         (bytes): The salt of the MD5
     """
@@ -55,10 +55,10 @@ def get_md5_salt(buf):
 
 def get_md5_signature(buf):
     """Parses a packet to find a TCP MD5 signature.
-    
+
     Args:
         buf (bytes): The packet as bytes. The packet must have an Ethernet, IP and TCP layer
-    
+
     Returns:
         (bytes): The signature of the MD5. If no signatures were found, returns None
     """
@@ -81,11 +81,11 @@ def get_md5_signature(buf):
 def check_if_TCP(buf):
     eth = dpkt.ethernet.Ethernet(buf)
     if eth.type != dpkt.ethernet.ETH_TYPE_IP:
-        #if it is not an IP packet, skip it
+        # if it is not an IP packet, skip it
         return False
     ip = eth.data
     if ip.v != 4 or ip.p != dpkt.ip.IP_PROTO_TCP:
-        #if it is not an IPv4 TCP packet
+        # if it is not an IPv4 TCP packet
         return False
     return True
 
@@ -95,13 +95,13 @@ def parse_signed_packets_md5(file):
     Parse a pcap file, looking for TCP MD5 signed packets and returning a list of tuples (hash, salt)
     Args:
         file (string): A pcap file name
-    
+
     Returns:
         list: A list of tuples (hash, salt)
     """
     # This function is mostly inspired by the tool pcap2john: https://github.com/truongkma/ctf-tools/blob/master/John/run/pcap2john.py
-    hashes = []         
-    with open(input_file,'rb') as f:
+    hashes = []
+    with open(input_file, 'rb') as f:
         capture = dpkt.pcap.Reader(f)
         for _, buf in capture:
             if check_if_TCP(buf):
@@ -114,15 +114,16 @@ def parse_signed_packets_md5(file):
 def check_password(packet_hash, salt, password):
     if packet_hash is None:
         packet_hash = ""
-    print("{:<16} | {:<32} | {:<32} | {:<64}".format("Password", "Packet Hash", "Computed Hash", "Salt (first 64 bytes)"))
-    if type(password)!="bytes":
+    print(
+        "{:<16} | {:<32} | {:<32} | {:<64}".format("Password", "Packet Hash", "Computed Hash", "Salt (first 64 bytes)"))
+    if type(password) != "bytes":
         password = password.encode("utf-8")
     salt += password
     h = hashlib.md5(salt).hexdigest()
-    sys.stdout.write("{:<16} | {} | {} | {}\n".format(password.decode("utf-8"),packet_hash.hex(), h, salt.hex()[:64]))
+    sys.stdout.write("{:<16} | {} | {} | {}\n".format(password.decode("utf-8"), packet_hash.hex(), h, salt.hex()[:64]))
 
 
-def launch_hashcat(h,s,mask):
+def launch_hashcat(h, s, mask):
     """Launch hashcat to launch a mask attack using the givan mask on a MD5 hash with the given salt
     Args:
         h (bytes): the hash in bytes
@@ -130,21 +131,21 @@ def launch_hashcat(h,s,mask):
         mask (string): the mask to use (can also contain hashcat options)
     """
     s_hash = h.hex() + ":" + s.hex()
-    #c = "hashcat-5.1.0/hashcat64.bin -m 20 -a 3 --hex-salt {} {}".format(s_hash, mask)
-    print(s_hash, ' ' ,mask)
+    # c = "hashcat-5.1.0/hashcat64.bin -m 20 -a 3 --hex-salt {} {}".format(s_hash, mask)
+    print(s_hash, ' ', mask)
     c = "hashcat -m 20 -a 3 --hex-salt {} {}".format(s_hash, mask)
     os.system(c + " > /dev/null 2> /dev/null")
-    #risk of command injection if letting user input there
+    # risk of command injection if letting user input there
     result = os.popen(c + " --show").read()
-    #print(result)
+    # print(result)
     return result
 
 
 if __name__ == "__main__":
-    #input_file = "captures/bgp_crafted.pcap"
+    # input_file = "captures/bgp_crafted.pcap"
     input_file = "break_this.pcap"
     hashes = parse_signed_packets_md5(input_file)
-    #print(hashes)
-    #check_password(hashes[0][0], hashes[0][1], "nana")
+    # print(hashes)
+    # check_password(hashes[0][0], hashes[0][1], "nana")
     mask = "-1 ?u?l -2 ?u?l?d ?1?1?1?1?1?1 --increment --increment-min 4"
     print(launch_hashcat(hashes[0][0], hashes[0][1], mask).split(':')[0])
