@@ -40,7 +40,7 @@ def craft_BGP_update_packet(nlri_prefix, path=[], local_pref=0, origin="IGP", ne
         path_attribute = BGPPathAttr(type_flags=0b01000000, type_code=3, attribute=BGPPANextHop(next_hop=next_hop)) #attr_len=4
         attributes.append(path_attribute)
     if path:
-        path_segment = BGPPAAS4Path(segment_value=path, segment_length=len(path), segment_type="AS_SEQUENCE")
+        path_segment = BGPPAASPath.ASPathSegment(segment_value=path, segment_length=len(path), segment_type="AS_SEQUENCE")
         path_attribute = BGPPathAttr(type_flags=0b01000000, type_code=2, attribute=path_segment) # attr_len=4
         attributes.append(path_attribute)
     if multi_exit_disc == 0:
