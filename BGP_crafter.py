@@ -24,7 +24,7 @@ def sign_single_packet(packet, password):
     salt += password
     packet_hash = hashlib.md5(salt).digest()
     #add the signature in the options
-    packet[TCP].options = [(19,packet_hash)]
+    packet[TCP].options = [(19, packet_hash)]
     return packet
 
 
